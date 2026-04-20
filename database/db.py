@@ -1,8 +1,9 @@
 import sqlite3
 import os
 from flask import Flask
+from werkzeug.security import generate_password_hash
 
-DATABASE = os.path.join(os.path.dirname(__file__), '..', 'expense_tracker.db')
+DATABASE = os.path.join(os.path.dirname(__file__), '..', 'spendly.db')
 
 
 def get_db():
@@ -63,8 +64,8 @@ def seed_db():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Check if categories already exist
-    cursor.execute("SELECT COUNT(*) FROM categories")
+    # Check if users already exist
+    cursor.execute("SELECT COUNT(*) FROM users")
     if cursor.fetchone()[0] > 0:
         conn.close()
         return
@@ -84,6 +85,38 @@ def seed_db():
     cursor.executemany(
         "INSERT INTO categories (name, icon) VALUES (?, ?)",
         categories
+    )
+    
+    # Insert demo user
+    password_hash = generate_password_hash('demo123')
+    cursor.execute(
+        "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+        ("Demo User", "demo@spendly.com", password_hash)
+    )
+    demo_user_id = cursor.lastrowid
+    
+    # Get category IDs to map correctly
+    cursor.execute("SELECT id, name FROM categories")
+    cat_map = {row['name']: row['id'] for row in cursor.fetchall()}
+    
+    # Prepare 8 sample expenses using recent dates
+    import datetime
+    today = datetime.date.today()
+    
+    sample_expenses = [
+        (demo_user_id, cat_map.get('Food', 1), 250.0, 'Lunch at local cafe', (today - datetime.timedelta(days=1)).isoformat()),
+        (demo_user_id, cat_map.get('Transport', 2), 120.0, 'Uber to office', (today - datetime.timedelta(days=2)).isoformat()),
+        (demo_user_id, cat_map.get('Bills', 3), 1500.0, 'Electricity bill', (today - datetime.timedelta(days=3)).isoformat()),
+        (demo_user_id, cat_map.get('Health', 4), 500.0, 'Pharmacy', (today - datetime.timedelta(days=5)).isoformat()),
+        (demo_user_id, cat_map.get('Entertainment', 5), 800.0, 'Movie tickets', (today - datetime.timedelta(days=7)).isoformat()),
+        (demo_user_id, cat_map.get('Shopping', 6), 2000.0, 'New shirt', (today - datetime.timedelta(days=8)).isoformat()),
+        (demo_user_id, cat_map.get('Food', 1), 450.0, 'Dinner', (today - datetime.timedelta(days=9)).isoformat()),
+        (demo_user_id, cat_map.get('Other', 8), 100.0, 'Miscellaneous', (today - datetime.timedelta(days=10)).isoformat())
+    ]
+    
+    cursor.executemany(
+        "INSERT INTO expenses (user_id, category_id, amount, description, date) VALUES (?, ?, ?, ?, ?)",
+        sample_expenses
     )
     
     conn.commit()
